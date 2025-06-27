@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>陀螺儀示例</title>
+    <title>陀螺儀數據讀取</title>
     <style>
         body {
             display: flex;
@@ -11,37 +11,81 @@
             align-items: center;
             justify-content: center;
             height: 100vh;
+            margin: 0;
             background-color: #f0f0f0;
-            font-family: Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            text-align: center;
         }
-        h1 {
-            font-size: 2em;
+        #permission-button {
+            padding: 15px 25px;
+            font-size: 1.2em;
+            cursor: pointer;
+            border: none;
+            border-radius: 8px;
+            background-color: #007bff;
+            color: white;
+            margin-bottom: 20px;
         }
         #output {
             font-size: 1.5em;
-            margin-top: 20px;
+            font-family: "SF Mono", "Fira Code", "Source Code Pro", monospace;
+            line-height: 1.6;
+        }
+        .error {
+            color: red;
         }
     </style>
 </head>
 <body>
 
-<div id="output">轉動手機查看數據</div>
+<h1>陀螺儀數據</h1>
+<button id="permission-button">啟用陀螺儀</button>
+<div id="output">點擊按鈕以開始</div>
 
 <script>
-    if (window.DeviceOrientationEvent) {
-        window.addEventListener('deviceorientation', function(event) {
-            const alpha = event.alpha ? Math.round(event.alpha) : 0;
-            const beta = event.beta ? Math.round(event.beta) : 0;
-            const gamma = event.gamma ? Math.round(event.gamma) : 0;
+    const permissionButton = document.getElementById('permission-button');
+    const output = document.getElementById('output');
 
-            document.getElementById('output').innerHTML = `
-                Alpha: ${alpha}°<br>
-                Beta: ${beta}°<br>
-                Gamma: ${gamma}°
-            `;
-        }, false);
+    // 檢查 DeviceOrientationEvent API 的支援度
+    if (window.DeviceOrientationEvent) {
+        permissionButton.addEventListener('click', requestPermission);
     } else {
-        document.getElementById('output').innerHTML = '設備不支援陀螺儀';
+        output.innerHTML = '您的瀏覽器不支援陀螺儀功能';
+        permissionButton.style.display = 'none';
+    }
+
+    function requestPermission() {
+        // 針對 iOS 13+ 的特定權限請求方法
+        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+            DeviceOrientationEvent.requestPermission()
+                .then(permissionState => {
+                    if (permissionState === 'granted') {
+                        // 取得權限後，開始監聽事件
+                        window.addEventListener('deviceorientation', handleOrientation);
+                        permissionButton.style.display = 'none'; // 隱藏按鈕
+                    } else {
+                        output.innerHTML = '您拒絕了權限請求';
+                    }
+                })
+                .catch(console.error);
+        } else {
+            // 對於非 iOS 13+ 的設備（如 Android）
+            // 這些設備通常不需要明確的 JS 權限請求，但需要使用者互動
+            window.addEventListener('deviceorientation', handleOrientation, false);
+            permissionButton.style.display = 'none'; // 隱藏按鈕
+        }
+    }
+
+    function handleOrientation(event) {
+        const alpha = event.alpha ? Math.round(event.alpha) : 0;
+        const beta = event.beta ? Math.round(event.beta) : 0;
+        const gamma = event.gamma ? Math.round(event.gamma) : 0;
+
+        output.innerHTML = `
+            羅盤方向 (Alpha): ${alpha}°<br>
+            前後傾斜 (Beta): ${beta}°<br>
+            左右傾斜 (Gamma): ${gamma}°
+        `;
     }
 </script>
 
