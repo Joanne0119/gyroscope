@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>陀螺儀示例</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+        h1 {
+            font-size: 2em;
+        }
+        #output {
+            font-size: 1.5em;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="output">轉動手機查看數據</div>
+
+<script>
+    if (window.DeviceOrientationEvent) {
+        window.addEventListener('deviceorientation', function(event) {
+            const alpha = event.alpha ? Math.round(event.alpha) : 0;
+            const beta = event.beta ? Math.round(event.beta) : 0;
+            const gamma = event.gamma ? Math.round(event.gamma) : 0;
+
+            document.getElementById('output').innerHTML = `
+                Alpha: ${alpha}°<br>
+                Beta: ${beta}°<br>
+                Gamma: ${gamma}°
+            `;
+        }, false);
+    } else {
+        document.getElementById('output').innerHTML = '設備不支援陀螺儀';
+    }
+</script>
+
+</body>
+</html>
