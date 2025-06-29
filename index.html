@@ -2,8 +2,8 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>陀螺儀數據讀取</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>體感遙控器模擬</title>
     <style>
         body {
             display: flex;
@@ -12,82 +12,199 @@
             justify-content: center;
             height: 100vh;
             margin: 0;
-            background-color: #f0f0f0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #1a1a1a;
+            color: #e0e0e0;
             text-align: center;
+            overflow: hidden;
         }
-        #permission-button {
-            padding: 15px 25px;
-            font-size: 1.2em;
+        .container {
+            width: 95%;
+            max-width: 600px;
+        }
+        .button-group {
+            margin-bottom: 20px;
+        }
+        button {
+            padding: 12px 20px;
+            font-size: 1.1em;
             cursor: pointer;
-            border: none;
+            border: 2px solid #007bff;
             border-radius: 8px;
             background-color: #007bff;
             color: white;
-            margin-bottom: 20px;
+            margin: 5px;
         }
-        #output {
-            font-size: 1.5em;
-            font-family: "SF Mono", "Fira Code", "Source Code Pro", monospace;
-            line-height: 1.6;
+        button:active {
+            background-color: #0056b3;
         }
-        .error {
-            color: red;
+        .data-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            padding: 15px;
+            background-color: #2c2c2c;
+            border-radius: 8px;
+        }
+        .data-item {
+            padding: 10px;
+            background-color: #3b3b3b;
+            border-radius: 5px;
+        }
+        .data-item h3 {
+            margin-top: 0;
+            color: #00aaff;
+        }
+        #final-command {
+            margin-top: 20px;
+            padding: 20px;
+            font-size: 2em;
+            font-weight: bold;
+            color: #ffc107;
+            background-color: #2c2c2c;
+            border-radius: 8px;
+            min-height: 50px;
         }
     </style>
 </head>
 <body>
 
-<h1>陀螺儀數據</h1>
-<button id="permission-button">啟用陀螺儀</button>
-<div id="output">點擊按鈕以開始</div>
+<div class="container">
+    <div class="button-group">
+        <button id="permission-button">1. 啟用感應器</button>
+        <button id="calibrate-button">2. 校正中心點</button>
+    </div>
+
+    <div class="data-grid">
+        <div class="data-item">
+            <h3>原始數值</h3>
+            <p id="raw-data">Beta: 0, Gamma: 0</p>
+        </div>
+        <div class="data-item">
+            <h3>校正基準</h3>
+            <p id="calibration-data">尚未校正</p>
+        </div>
+        <div class="data-item">
+            <h3>相對角度</h3>
+            <p id="relative-data">Beta: 0, Gamma: 0</p>
+        </div>
+        <div class="data-item">
+            <h3>當前方向</h3>
+            <p id="direction-data">靜止</p>
+        </div>
+    </div>
+
+    <div id="final-command">
+        等待指令...
+    </div>
+</div>
 
 <script>
     const permissionButton = document.getElementById('permission-button');
-    const output = document.getElementById('output');
+    const calibrateButton = document.getElementById('calibrate-button');
+    
+    const rawDataElem = document.getElementById('raw-data');
+    const calibrationDataElem = document.getElementById('calibration-data');
+    const relativeDataElem = document.getElementById('relative-data');
+    const directionDataElem = document.getElementById('direction-data');
+    const finalCommandElem = document.getElementById('final-command');
 
-    // 檢查 DeviceOrientationEvent API 的支援度
-    if (window.DeviceOrientationEvent) {
-        permissionButton.addEventListener('click', requestPermission);
-    } else {
-        output.innerHTML = '您的瀏覽器不支援陀螺儀功能';
-        permissionButton.style.display = 'none';
-    }
+    let calibration = { beta: 0, gamma: 0 };
+    let isCalibrated = false;
+    let currentBeta = 0;
+    let currentGamma = 0;
+    
+    const MOVEMENT_THRESHOLD = 20; // 傾斜超過20度才觸發
+    let movementInterval = null;
 
-    function requestPermission() {
-        // 針對 iOS 13+ 的特定權限請求方法
+    // 1. 權限請求
+    permissionButton.addEventListener('click', requestSensorPermission);
+
+    function requestSensorPermission() {
         if (typeof DeviceOrientationEvent.requestPermission === 'function') {
             DeviceOrientationEvent.requestPermission()
                 .then(permissionState => {
                     if (permissionState === 'granted') {
-                        // 取得權限後，開始監聽事件
                         window.addEventListener('deviceorientation', handleOrientation);
-                        permissionButton.style.display = 'none'; // 隱藏按鈕
+                        this.textContent = '感應器已啟用';
+                        this.disabled = true;
                     } else {
-                        output.innerHTML = '您拒絕了權限請求';
+                        alert('您拒絕了權限請求');
                     }
                 })
                 .catch(console.error);
         } else {
-            // 對於非 iOS 13+ 的設備（如 Android）
-            // 這些設備通常不需要明確的 JS 權限請求，但需要使用者互動
-            window.addEventListener('deviceorientation', handleOrientation, false);
-            permissionButton.style.display = 'none'; // 隱藏按鈕
+            // 對於非 iOS 13+ 的設備
+            window.addEventListener('deviceorientation', handleOrientation);
+            this.textContent = '感應器已啟用';
+            this.disabled = true;
         }
     }
 
+    // 2. 校正功能
+    calibrateButton.addEventListener('click', () => {
+        calibration.beta = currentBeta;
+        calibration.gamma = currentGamma;
+        isCalibrated = true;
+        calibrationDataElem.innerHTML = `Beta: ${calibration.beta.toFixed(1)}, Gamma: ${calibration.gamma.toFixed(1)}`;
+        console.log('校正完成:', calibration);
+    });
+
+    // 3. 處理陀螺儀數據
     function handleOrientation(event) {
-        const alpha = event.alpha ? Math.round(event.alpha) : 0;
-        const beta = event.beta ? Math.round(event.beta) : 0;
-        const gamma = event.gamma ? Math.round(event.gamma) : 0;
+        if (!event.beta || !event.gamma) return;
 
-        output.innerHTML = `
-            羅盤方向 (Alpha): ${alpha}°<br>
-            前後傾斜 (Beta): ${beta}°<br>
-            左右傾斜 (Gamma): ${gamma}°
-        `;
+        currentBeta = event.beta;
+        currentGamma = event.gamma;
+
+        rawDataElem.innerHTML = `Beta: ${currentBeta.toFixed(1)}, Gamma: ${currentGamma.toFixed(1)}`;
+        
+        if (!isCalibrated) return;
+
+        // 計算相對角度
+        const relativeBeta = currentBeta - calibration.beta;
+        const relativeGamma = currentGamma - calibration.gamma;
+        
+        relativeDataElem.innerHTML = `Beta: ${relativeBeta.toFixed(1)}, Gamma: ${relativeGamma.toFixed(1)}`;
+        
+        // 判斷移動方向
+        updateMovementDirection(relativeBeta, relativeGamma);
     }
-</script>
+    
+    // 4. 判斷方向並觸發持續移動
+    function updateMovementDirection(beta, gamma) {
+        let direction = "靜止";
+        
+        // 優先判斷上下 (beta)，因為傾斜角度通常較大
+        if (beta > MOVEMENT_THRESHOLD) {
+            direction = "往下";
+        } else if (beta < -MOVEMENT_THRESHOLD) {
+            direction = "往上";
+        } 
+        // 如果上下沒有觸發，再判斷左右 (gamma)
+        else if (gamma > MOVEMENT_THRESHOLD) {
+            direction = "往右";
+        } else if (gamma < -MOVEMENT_THRESHOLD) {
+            direction = "往左";
+        }
 
+        directionDataElem.textContent = direction;
+        
+        // 如果方向不是靜止，且計時器未啟動，則啟動計時器
+        if (direction !== "靜止" && movementInterval === null) {
+            movementInterval = setInterval(() => {
+                finalCommandElem.textContent = `持續發送指令: ${direction}`;
+                console.log(`發送指令: ${direction}`);
+            }, 1000); // 每秒發送一次
+        } 
+        // 如果方向是靜止，則清除計時器
+        else if (direction === "靜止" && movementInterval !== null) {
+            clearInterval(movementInterval);
+            movementInterval = null;
+            finalCommandElem.textContent = "等待指令...";
+        }
+    }
+
+</script>
 </body>
 </html>
