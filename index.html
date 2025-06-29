@@ -92,13 +92,7 @@
     const relativeDataElem = document.getElementById('relative-data');
     const finalCommandElem = document.getElementById('final-command');
 
-    // --- 震動測試按鈕宣告 ---
-    const vibrateUpBtn = document.getElementById('vibrate-up');
-    const vibrateDownBtn = document.getElementById('vibrate-down');
-    const vibrateSideBtn = document.getElementById('vibrate-side');
-    const vibrateStopBtn = document.getElementById('vibrate-stop');
-
-    // --- 變數宣告 (與之前相同) ---
+    // --- 變數宣告 ---
     let calibration = { alpha: 0, beta: 0 };
     let isCalibrated = false;
     let currentAlpha = 0;
@@ -106,46 +100,68 @@
     const MOVEMENT_THRESHOLD = 20;
     let lastDirection = '靜止';
 
-    // --- 這是您要求的「打包好的震動函式」 ---
-    function triggerVibration(direction) {
-        if (!('vibrate' in navigator)) {
-            console.log("瀏覽器不支援震動");
-            return;
-        }
+    // --- 新增：Web Audio API 相關變數 ---
+    let audioContext; // 用來管理和播放所有聲音的「音訊環境」
+
+    // --- 新增：打包好的「聲音播放函式」---
+    function playFeedbackSound(direction) {
+        // 如果音訊環境還沒準備好，就直接返回
+        if (!audioContext) return;
+
+        // 建立一個振盪器 (OscillatorNode)，它能產生一個數學音波
+        const oscillator = audioContext.createOscillator();
+        // 建立一個增益節點 (GainNode)，用來控制音量
+        const gainNode = audioContext.createGain();
+
+        // 將振盪器連接到增益節點，再將增益節點連接到最終的輸出（喇叭）
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+
+        // 設定音量：初始音量為 0.3 (避免太大聲)
+        gainNode.gain.value = 0.3;
+        // 設定波形為「正弦波」，聲音比較圓潤
+        oscillator.type = 'sine';
+
+        // 根據不同方向，設定不同的音高 (頻率 Hz)
         switch (direction) {
             case '往上':
-                navigator.vibrate(150); // 長震
+                oscillator.frequency.value = 800; // 高音
                 break;
             case '往下':
-                navigator.vibrate([70, 50, 70]); // 兩次短震
+                oscillator.frequency.value = 400; // 低音
                 break;
             case '往左':
             case '往右':
-                navigator.vibrate(80); // 短震
+                oscillator.frequency.value = 600; // 中音
                 break;
             case '靜止':
-                navigator.vibrate(50); // 極短震
+                if (lastDirection !== '靜止') {
+                    oscillator.frequency.value = 200; // 非常低的 "滴" 聲
+                    gainNode.gain.value = 0.15; // 聲音更小
+                } else {
+                    return; // 如果本來就是靜止，則不播放聲音
+                }
                 break;
         }
+
+        // 取得目前時間
+        const now = audioContext.currentTime;
+        // 立即開始播放
+        oscillator.start(now);
+        // 在 0.1 秒後，讓音量線性衰減到 0，製造一個短促的 "嗶" 聲效果
+        gainNode.gain.linearRampToValueAtTime(0, now + 0.1);
+        // 在 0.1 秒後停止播放振盪器，釋放資源
+        oscillator.stop(now + 0.1);
     }
-    
-    // --- 將震動函式綁定到測試按鈕 ---
-    vibrateUpBtn.addEventListener('click', () => triggerVibration('往上'));
-    vibrateDownBtn.addEventListener('click', () => triggerVibration('往下'));
-    vibrateSideBtn.addEventListener('click', () => triggerVibration('往左'));
-    vibrateStopBtn.addEventListener('click', () => triggerVibration('靜止'));
 
 
-    // --- 主要遙控器邏輯 (陀螺儀部分) ---
-    permissionButton.addEventListener('click', requestSensorPermission);
-    calibrateButton.addEventListener('click', () => {
-        calibration.alpha = currentAlpha;
-        calibration.beta = currentBeta;
-        isCalibrated = true;
-        calibrationDataElem.innerHTML = `Alpha: ${calibration.alpha.toFixed(1)}, Beta: ${calibration.beta.toFixed(1)}`;
-    });
-
+    // --- 權限請求 (修改：在啟用感應器時，同時初始化音訊環境) ---
     function requestSensorPermission() {
+        // 初始化 AudioContext。必須在使用者互動後執行，以符合瀏覽器自動播放策略
+        if (!audioContext) {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
         if (typeof DeviceOrientationEvent.requestPermission === 'function') {
             DeviceOrientationEvent.requestPermission().then(state => {
                 if (state === 'granted') {
@@ -158,6 +174,16 @@
             this.textContent = '感應器已啟用'; this.disabled = true;
         }
     }
+    permissionButton.addEventListener('click', requestSensorPermission);
+
+
+    // --- 校正與陀螺儀處理 (與之前版本相同) ---
+    calibrateButton.addEventListener('click', () => {
+        calibration.alpha = currentAlpha;
+        calibration.beta = currentBeta;
+        isCalibrated = true;
+        calibrationDataElem.innerHTML = `Alpha: ${calibration.alpha.toFixed(1)}, Beta: ${calibration.beta.toFixed(1)}`;
+    });
 
     function handleOrientation(event) {
         if (!event.alpha || !event.beta) return;
@@ -174,6 +200,7 @@
         updateMovementDirection(relativeBeta, diff);
     }
     
+    // --- 判斷方向 (修改：觸發聲音而非震動) ---
     function updateMovementDirection(beta, alpha) {
         let direction = "靜止";
         if (beta > MOVEMENT_THRESHOLD) direction = "往上";
@@ -181,19 +208,18 @@
         else if (alpha < -MOVEMENT_THRESHOLD) direction = "往右";
         else if (alpha > MOVEMENT_THRESHOLD) direction = "往左";
 
-        // 為了專心測試按鈕，我們先暫時停用陀螺儀自動觸發震動的功能
-        /*
+        // 如果當前方向與上一次不同，就觸發「聲音」回饋
         if (direction !== lastDirection) {
-            triggerVibration(direction);
+            playFeedbackSound(direction);
         }
+        // 更新上一次的方向紀錄
         lastDirection = direction;
-        */
 
         // 更新畫面顯示
         let text = (direction === "靜止") ? "等待指令..." : `指令: ${direction}`;
-        finalCommandElem.innerHTML = `<h3>當前方向</h3><p>${text}</p>`;
+        // 我們將文字更新的部分也整合到 final-command 區塊，讓版面更簡潔
+        finalCommandElem.innerHTML = `<h3>當前方向</h3><p style="font-weight: bold; font-size: 1.2em; color: #ffc107;">${direction}</p>`;
     }
-
 </script>
 </body>
 </html>
