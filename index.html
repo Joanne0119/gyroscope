@@ -113,11 +113,12 @@
     let isCalibrated = false;
     let currentAlpha = 0;
     let currentBeta = 0;
-    
-    const MOVEMENT_THRESHOLD = 20; // 傾斜超過20度才觸發
+    let currentGamma = 0;
+
+    const MOVEMENT_THRESHOLD = 10; // 傾斜超過10度才觸發
     let movementInterval = null;
 
-    // 1. 權限請求 (與之前相同)
+    // 1. 權限請求 
     permissionButton.addEventListener('click', requestSensorPermission);
     function requestSensorPermission() {
         if (typeof DeviceOrientationEvent.requestPermission === 'function') {
@@ -138,19 +139,20 @@
     calibrateButton.addEventListener('click', () => {
         calibration.alpha = currentAlpha;
         calibration.beta = currentBeta;
+        calibration.gamma = currentGamma;
         isCalibrated = true;
-        calibrationDataElem.innerHTML = `Alpha: ${calibration.alpha.toFixed(1)}, Beta: ${calibration.beta.toFixed(1)}`;
+        calibrationDataElem.innerHTML = `Alpha: ${calibration.alpha.toFixed(1)}, Beta: ${calibration.beta.toFixed(1)}, Gamma: ${calibration.gamma.toFixed(1)}`;
     });
 
     // 3. 處理陀螺儀數據
     function handleOrientation(event) {
-        if (!event.alpha || !event.beta) return;
+        if (!event.alpha || !event.beta || !event.gamma) return;
 
         currentAlpha = event.alpha;
         currentBeta = event.beta;
 
-        rawDataElem.innerHTML = `Alpha: ${currentAlpha.toFixed(1)}, Beta: ${currentBeta.toFixed(1)}`;
-        
+        rawDataElem.innerHTML = `Alpha: ${currentAlpha.toFixed(1)}, Beta: ${currentBeta.toFixed(1)}, Gamma: ${currentGamma.toFixed(1)}`;
+
         if (!isCalibrated) return;
 
         // 計算相對角度 (Beta 的計算不變)
@@ -165,27 +167,27 @@
         }
         const relativeAlpha = diff;
         
-        relativeDataElem.innerHTML = `Alpha: ${relativeAlpha.toFixed(1)}, Beta: ${relativeBeta.toFixed(1)}`;
+        relativeDataElem.innerHTML = `Alpha: ${relativeAlpha.toFixed(1)}, Beta: ${relativeBeta.toFixed(1)}, Gamma: ${currentGamma.toFixed(1)}`;
         
         // 判斷移動方向
         updateMovementDirection(relativeBeta, relativeAlpha);
     }
     
     // 4. 判斷方向 (將 gamma 換成 alpha)
-    function updateMovementDirection(beta, alpha) {
+    function updateMovementDirection(beta, alpha, gamma) {
         let direction = "靜止";
         
         // 優先判斷上下 (beta)
         if (beta < -MOVEMENT_THRESHOLD) {
-            direction = "往上";
-        } else if (beta > MOVEMENT_THRESHOLD) {
             direction = "往下";
+        } else if (beta > MOVEMENT_THRESHOLD) {
+            direction = "往上";
         } 
         // 再判斷左右 (alpha)
         else if (alpha > MOVEMENT_THRESHOLD) {
-            direction = "往右";
-        } else if (alpha < -MOVEMENT_THRESHOLD) {
             direction = "往左";
+        } else if (alpha < -MOVEMENT_THRESHOLD) {
+            direction = "往右";
         }
 
         directionDataElem.textContent = direction;
