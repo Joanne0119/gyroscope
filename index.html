@@ -3,27 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>體感遙控器模擬 (修正版)</title>
+    <title>體感遙控器</title>
     <style>
         body {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            margin: 0;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             background-color: #1a1a1a;
             color: #e0e0e0;
             text-align: center;
-            overflow: hidden;
+            padding: 15px;
         }
         .container {
-            width: 95%;
             max-width: 600px;
+            margin: 0 auto;
         }
-        .button-group {
+        .button-group, .test-panel {
             margin-bottom: 20px;
+            padding: 15px;
+            background-color: #2c2c2c;
+            border-radius: 8px;
+        }
+        h2 {
+            margin-top: 0;
+            color: #00aaff;
+            border-bottom: 1px solid #444;
+            padding-bottom: 10px;
         }
         button {
             padding: 12px 20px;
@@ -34,43 +37,29 @@
             background-color: #007bff;
             color: white;
             margin: 5px;
+            min-width: 120px;
         }
-        button:active {
-            background-color: #0056b3;
-        }
-        .data-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            padding: 15px;
-            background-color: #2c2c2c;
-            border-radius: 8px;
-        }
-        .data-item {
-            padding: 10px;
-            background-color: #3b3b3b;
-            border-radius: 5px;
-        }
-        .data-item h3 {
-            margin-top: 0;
-            color: #00aaff;
-        }
-        #final-command {
-            margin-top: 20px;
-            padding: 20px;
-            font-size: 2em;
-            font-weight: bold;
-            color: #ffc107;
-            background-color: #2c2c2c;
-            border-radius: 8px;
-            min-height: 50px;
-        }
+        button:active { background-color: #0056b3; }
+        .data-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+        .data-item { padding: 10px; background-color: #3b3b3b; border-radius: 5px; }
+        .data-item h3 { margin-top: 0; color: #00aaff; }
+        #final-command { font-size: 1.8em; font-weight: bold; color: #ffc107; }
     </style>
 </head>
 <body>
 
 <div class="container">
+    
+    <div class="test-panel">
+        <h2>震動功能測試面板</h2>
+        <button id="vibrate-up">往上震動</button>
+        <button id="vibrate-down">往下震動</button>
+        <button id="vibrate-side">左右震動</button>
+        <button id="vibrate-stop">靜止震動</button>
+    </div>
+
     <div class="button-group">
+        <h2>主要遙控功能</h2>
         <button id="permission-button">1. 啟用感應器</button>
         <button id="calibrate-button">2. 校正中心點</button>
     </div>
@@ -78,7 +67,7 @@
     <div class="data-grid">
         <div class="data-item">
             <h3>原始數值</h3>
-            <p id="raw-data">Alpha: 0, Beta: 0, Gamma: 0</p>
+            <p id="raw-data">Alpha: 0, Beta: 0</p>
         </div>
         <div class="data-item">
             <h3>校正基準</h3>
@@ -86,58 +75,69 @@
         </div>
         <div class="data-item">
             <h3>相對角度</h3>
-            <p id="relative-data">Alpha: 0, Beta: 0, Gamma: 0</p>
+            <p id="relative-data">Alpha: 0, Beta: 0</p>
         </div>
-        <div class="data-item">
-            <h3>當前方向</h3>
-            <p id="direction-data">靜止</p>
+        <div class="data-item" id="final-command">
+            等待指令...
         </div>
-    </div>
-
-    <div id="final-command">
-        等待指令...
     </div>
 </div>
 
 <script>
+    // --- 所有元素宣告 (與之前相同) ---
     const permissionButton = document.getElementById('permission-button');
     const calibrateButton = document.getElementById('calibrate-button');
-    
     const rawDataElem = document.getElementById('raw-data');
     const calibrationDataElem = document.getElementById('calibration-data');
     const relativeDataElem = document.getElementById('relative-data');
-    const directionDataElem = document.getElementById('direction-data');
     const finalCommandElem = document.getElementById('final-command');
 
+    // --- 震動測試按鈕宣告 ---
+    const vibrateUpBtn = document.getElementById('vibrate-up');
+    const vibrateDownBtn = document.getElementById('vibrate-down');
+    const vibrateSideBtn = document.getElementById('vibrate-side');
+    const vibrateStopBtn = document.getElementById('vibrate-stop');
+
+    // --- 變數宣告 (與之前相同) ---
     let calibration = { alpha: 0, beta: 0 };
     let isCalibrated = false;
     let currentAlpha = 0;
     let currentBeta = 0;
-    
     const MOVEMENT_THRESHOLD = 20;
-
-    // --- 新增變數 ---
-    // 用來儲存上一次的方向，以便判斷方向是否改變
     let lastDirection = '靜止';
 
-    // 1. 權限請求 (與之前相同)
-    permissionButton.addEventListener('click', requestSensorPermission);
-    function requestSensorPermission() {
-        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-            DeviceOrientationEvent.requestPermission()
-                .then(permissionState => {
-                    if (permissionState === 'granted') {
-                        window.addEventListener('deviceorientation', handleOrientation);
-                        this.textContent = '感應器已啟用'; this.disabled = true;
-                    } else { alert('您拒絕了權限請求'); }
-                }).catch(console.error);
-        } else {
-            window.addEventListener('deviceorientation', handleOrientation);
-            this.textContent = '感應器已啟用'; this.disabled = true;
+    // --- 這是您要求的「打包好的震動函式」 ---
+    function triggerVibration(direction) {
+        if (!('vibrate' in navigator)) {
+            console.log("瀏覽器不支援震動");
+            return;
+        }
+        switch (direction) {
+            case '往上':
+                navigator.vibrate(150); // 長震
+                break;
+            case '往下':
+                navigator.vibrate([70, 50, 70]); // 兩次短震
+                break;
+            case '往左':
+            case '往右':
+                navigator.vibrate(80); // 短震
+                break;
+            case '靜止':
+                navigator.vibrate(50); // 極短震
+                break;
         }
     }
+    
+    // --- 將震動函式綁定到測試按鈕 ---
+    vibrateUpBtn.addEventListener('click', () => triggerVibration('往上'));
+    vibrateDownBtn.addEventListener('click', () => triggerVibration('往下'));
+    vibrateSideBtn.addEventListener('click', () => triggerVibration('往左'));
+    vibrateStopBtn.addEventListener('click', () => triggerVibration('靜止'));
 
-    // 2. 校正功能 (與之前相同)
+
+    // --- 主要遙控器邏輯 (陀螺儀部分) ---
+    permissionButton.addEventListener('click', requestSensorPermission);
     calibrateButton.addEventListener('click', () => {
         calibration.alpha = currentAlpha;
         calibration.beta = currentBeta;
@@ -145,42 +145,22 @@
         calibrationDataElem.innerHTML = `Alpha: ${calibration.alpha.toFixed(1)}, Beta: ${calibration.beta.toFixed(1)}`;
     });
 
-    // --- 新增函式 ---
-    // 根據方向觸發不同的震動模式
-    function triggerVibration(direction) {
-        // 檢查瀏覽器是否支援震動 API
-        if (!('vibrate' in navigator)) {
-            return;
-        }
-
-        switch (direction) {
-            case '往上':
-                // 往上：一個長的震動
-                navigator.vibrate(150);
-                break;
-            case '往下':
-                // 往下：兩個短的震動，像 "咚咚"
-                navigator.vibrate([70, 50, 70]);
-                break;
-            case '往左':
-            case '往右':
-                // 左右：一個短促的震動
-                navigator.vibrate(80);
-                break;
-            case '靜止':
-                // 回到靜止狀態時，給一個非常輕微的 "滴答" 回饋
-                if (lastDirection !== '靜止') {
-                    navigator.vibrate(50);
+    function requestSensorPermission() {
+        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+            DeviceOrientationEvent.requestPermission().then(state => {
+                if (state === 'granted') {
+                    window.addEventListener('deviceorientation', handleOrientation);
+                    this.textContent = '感應器已啟用'; this.disabled = true;
                 }
-                break;
+            }).catch(console.error);
+        } else {
+            window.addEventListener('deviceorientation', handleOrientation);
+            this.textContent = '感應器已啟用'; this.disabled = true;
         }
     }
 
-
-    // 3. 處理陀螺儀數據 (與之前相同)
     function handleOrientation(event) {
         if (!event.alpha || !event.beta) return;
-
         currentAlpha = event.alpha;
         currentBeta = event.beta;
         rawDataElem.innerHTML = `Alpha: ${currentAlpha.toFixed(1)}, Beta: ${currentBeta.toFixed(1)}`;
@@ -188,46 +168,32 @@
 
         const relativeBeta = currentBeta - calibration.beta;
         let diff = currentAlpha - calibration.alpha;
-        if (diff < -180) { diff += 360; } 
-        else if (diff > 180) { diff -= 360; }
-        const relativeAlpha = diff;
+        if (diff < -180) diff += 360; 
+        else if (diff > 180) diff -= 360;
         
-        relativeDataElem.innerHTML = `Alpha: ${relativeAlpha.toFixed(1)}, Beta: ${relativeBeta.toFixed(1)}`;
-        updateMovementDirection(relativeBeta, relativeAlpha);
+        updateMovementDirection(relativeBeta, diff);
     }
     
-    // 4. 判斷方向 (已整合震動功能)
     function updateMovementDirection(beta, alpha) {
         let direction = "靜止";
-        
-        // 判斷方向 (反轉後的版本)
-        if (beta > MOVEMENT_THRESHOLD) {
-            direction = "往上";
-        } else if (beta < -MOVEMENT_THRESHOLD) {
-            direction = "往下";
-        } else if (alpha < -MOVEMENT_THRESHOLD) {
-            direction = "往右";
-        } else if (alpha > MOVEMENT_THRESHOLD) {
-            direction = "往左";
-        }
+        if (beta > MOVEMENT_THRESHOLD) direction = "往上";
+        else if (beta < -MOVEMENT_THRESHOLD) direction = "往下";
+        else if (alpha < -MOVEMENT_THRESHOLD) direction = "往右";
+        else if (alpha > MOVEMENT_THRESHOLD) direction = "往左";
 
-        // --- 新增判斷 ---
-        // 如果當前方向與上一次不同，就觸發震動
+        // 為了專心測試按鈕，我們先暫時停用陀螺儀自動觸發震動的功能
+        /*
         if (direction !== lastDirection) {
             triggerVibration(direction);
         }
-        // 更新上一次的方向紀錄
         lastDirection = direction;
+        */
 
-
-        // 更新畫面顯示 (即時更新版本)
-        directionDataElem.textContent = direction;
-        if (direction === "靜止") {
-            finalCommandElem.textContent = "等待指令...";
-        } else {
-            finalCommandElem.textContent = `指令: ${direction}`;
-        }
+        // 更新畫面顯示
+        let text = (direction === "靜止") ? "等待指令..." : `指令: ${direction}`;
+        finalCommandElem.innerHTML = `<h3>當前方向</h3><p>${text}</p>`;
     }
+
 </script>
 </body>
 </html>
