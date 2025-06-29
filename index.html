@@ -7,8 +7,6 @@
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background-color: #1a1a1a;
-            color: #e0e0e0;
             text-align: center;
             padding: 15px;
         }
@@ -16,15 +14,14 @@
             max-width: 600px;
             margin: 0 auto;
         }
-        .button-group, .test-panel {
+        .button-group {
             margin-bottom: 20px;
             padding: 15px;
-            background-color: #2c2c2c;
             border-radius: 8px;
+            font-weight: bold;
         }
         h2 {
             margin-top: 0;
-            color: #00aaff;
             border-bottom: 1px solid #444;
             padding-bottom: 10px;
         }
@@ -35,133 +32,123 @@
             border: 2px solid #007bff;
             border-radius: 8px;
             background-color: #007bff;
-            color: white;
             margin: 5px;
             min-width: 120px;
+            color: white;
         }
         button:active { background-color: #0056b3; }
-        .data-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
-        .data-item { padding: 10px; background-color: #3b3b3b; border-radius: 5px; }
-        .data-item h3 { margin-top: 0; color: #00aaff; }
-        #final-command { font-size: 1.8em; font-weight: bold; color: #ffc107; }
+        
+        /* 新的UI項目樣式 */
+        .info-item {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+        .info-item h3 {
+            margin-top: 0;
+            margin-bottom: 10px;
+
+            font-weight: 500;
+        }
+        .info-item p {
+            margin: 0;
+            font-family: 'SF Mono', 'Fira Code', 'Source Code Pro', monospace;
+            font-size: 1.2em;
+        }
+        #direction-display {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #e19200;
+        }
     </style>
 </head>
 <body>
 
 <div class="container">
-    
-    <div class="test-panel">
-        <h2>震動功能測試面板</h2>
-        <button id="vibrate-up">往上震動</button>
-        <button id="vibrate-down">往下震動</button>
-        <button id="vibrate-side">左右震動</button>
-        <button id="vibrate-stop">靜止震動</button>
-    </div>
 
     <div class="button-group">
-        <h2>主要遙控功能</h2>
-        <button id="permission-button">1. 啟用感應器</button>
-        <button id="calibrate-button">2. 校正中心點</button>
+        <h2>遙控功能</h2>
+        <button id="permission-button">啟用感應器</button>
+        <button id="calibrate-button">校正中心點</button>
     </div>
 
-    <div class="data-grid">
-        <div class="data-item">
-            <h3>原始數值</h3>
-            <p id="raw-data">Alpha: 0, Beta: 0</p>
-        </div>
-        <div class="data-item">
-            <h3>校正基準</h3>
-            <p id="calibration-data">尚未校正</p>
-        </div>
-        <div class="data-item">
-            <h3>相對角度</h3>
-            <p id="relative-data">Alpha: 0, Beta: 0</p>
-        </div>
-        <div class="data-item" id="final-command">
-            等待指令...
-        </div>
+    <div class="info-item">
+        <h3>原始數值</h3>
+        <p id="raw-data">Alpha: 0, Beta: 0, Gamma: 0</p>
     </div>
+    
+    <div class="info-item">
+        <h3>校正基準</h3>
+        <p id="calibration-data">尚未校正</p>
+    </div>
+
+    <div class="info-item">
+        <h3>目前方向</h3>
+        <p id="direction-display">靜止</p>
+    </div>
+
 </div>
 
 <script>
-    // --- 所有元素宣告 (與之前相同) ---
+    // --- 元素宣告  ---
     const permissionButton = document.getElementById('permission-button');
     const calibrateButton = document.getElementById('calibrate-button');
     const rawDataElem = document.getElementById('raw-data');
     const calibrationDataElem = document.getElementById('calibration-data');
-    const relativeDataElem = document.getElementById('relative-data');
-    const finalCommandElem = document.getElementById('final-command');
+    const directionDisplayElem = document.getElementById('direction-display'); 
 
     // --- 變數宣告 ---
-    let calibration = { alpha: 0, beta: 0 };
+    let calibration = { alpha: 0, beta: 0, gamma: 0 }; 
     let isCalibrated = false;
     let currentAlpha = 0;
     let currentBeta = 0;
+    let currentGamma = 0; 
     const MOVEMENT_THRESHOLD = 20;
     let lastDirection = '靜止';
 
-    // --- 新增：Web Audio API 相關變數 ---
-    let audioContext; // 用來管理和播放所有聲音的「音訊環境」
+    let audioContext;
 
-    // --- 新增：打包好的「聲音播放函式」---
+    // --- 聲音播放函式 ---
     function playFeedbackSound(direction) {
-        // 如果音訊環境還沒準備好，就直接返回
         if (!audioContext) return;
-
-        // 建立一個振盪器 (OscillatorNode)，它能產生一個數學音波
         const oscillator = audioContext.createOscillator();
-        // 建立一個增益節點 (GainNode)，用來控制音量
         const gainNode = audioContext.createGain();
-
-        // 將振盪器連接到增益節點，再將增益節點連接到最終的輸出（喇叭）
-        oscillator.connect(gainNode);
+        const panner = audioContext.createStereoPanner();
+        oscillator.connect(panner);
+        panner.connect(gainNode);
         gainNode.connect(audioContext.destination);
-
-        // 設定音量：初始音量為 0.3 (避免太大聲)
+        let panValue = 0;
         gainNode.gain.value = 0.3;
-        // 設定波形為「正弦波」，聲音比較圓潤
         oscillator.type = 'sine';
-
-        // 根據不同方向，設定不同的音高 (頻率 Hz)
         switch (direction) {
             case '往上':
-                oscillator.frequency.value = 800; // 高音
-                break;
+                oscillator.frequency.value = 800; panValue = 0; break;
             case '往下':
-                oscillator.frequency.value = 400; // 低音
-                break;
+                oscillator.frequency.value = 400; panValue = 0; break;
             case '往左':
+                oscillator.frequency.value = 600; panValue = -1; break;
             case '往右':
-                oscillator.frequency.value = 600; // 中音
-                break;
+                oscillator.frequency.value = 600; panValue = 1; break;
             case '靜止':
                 if (lastDirection !== '靜止') {
-                    oscillator.frequency.value = 200; // 非常低的 "滴" 聲
-                    gainNode.gain.value = 0.15; // 聲音更小
-                } else {
-                    return; // 如果本來就是靜止，則不播放聲音
-                }
+                    oscillator.frequency.value = 200;
+                    gainNode.gain.value = 0.15;
+                    panValue = 0;
+                } else { return; }
                 break;
         }
-
-        // 取得目前時間
         const now = audioContext.currentTime;
-        // 立即開始播放
+        panner.pan.setValueAtTime(panValue, now);
         oscillator.start(now);
-        // 在 0.1 秒後，讓音量線性衰減到 0，製造一個短促的 "嗶" 聲效果
         gainNode.gain.linearRampToValueAtTime(0, now + 0.1);
-        // 在 0.1 秒後停止播放振盪器，釋放資源
         oscillator.stop(now + 0.1);
     }
-
-
-    // --- 權限請求 (修改：在啟用感應器時，同時初始化音訊環境) ---
+    
+    // --- 權限請求 ---
     function requestSensorPermission() {
-        // 初始化 AudioContext。必須在使用者互動後執行，以符合瀏覽器自動播放策略
         if (!audioContext) {
             audioContext = new (window.AudioContext || window.webkitAudioContext)();
         }
-
         if (typeof DeviceOrientationEvent.requestPermission === 'function') {
             DeviceOrientationEvent.requestPermission().then(state => {
                 if (state === 'granted') {
@@ -176,20 +163,25 @@
     }
     permissionButton.addEventListener('click', requestSensorPermission);
 
-
-    // --- 校正與陀螺儀處理 (與之前版本相同) ---
+    // --- 校正與陀螺儀處理  ---
     calibrateButton.addEventListener('click', () => {
         calibration.alpha = currentAlpha;
         calibration.beta = currentBeta;
+        calibration.gamma = currentGamma; // 順便記錄gamma
         isCalibrated = true;
-        calibrationDataElem.innerHTML = `Alpha: ${calibration.alpha.toFixed(1)}, Beta: ${calibration.beta.toFixed(1)}`;
+        // 更新校正基準顯示
+        calibrationDataElem.innerHTML = `Alpha: ${calibration.alpha.toFixed(1)}, Beta: ${calibration.beta.toFixed(1)}, Gamma: ${calibration.gamma.toFixed(1)}`;
     });
 
     function handleOrientation(event) {
-        if (!event.alpha || !event.beta) return;
+        if (event.alpha === null || event.beta === null || event.gamma === null) return;
         currentAlpha = event.alpha;
         currentBeta = event.beta;
-        rawDataElem.innerHTML = `Alpha: ${currentAlpha.toFixed(1)}, Beta: ${currentBeta.toFixed(1)}`;
+        currentGamma = event.gamma; // 捕獲gamma值
+
+        // 更新原始數據顯示
+        rawDataElem.innerHTML = `Alpha: ${currentAlpha.toFixed(1)}, Beta: ${currentBeta.toFixed(1)}, Gamma: ${currentGamma.toFixed(1)}`;
+        
         if (!isCalibrated) return;
 
         const relativeBeta = currentBeta - calibration.beta;
@@ -200,7 +192,7 @@
         updateMovementDirection(relativeBeta, diff);
     }
     
-    // --- 判斷方向 (修改：觸發聲音而非震動) ---
+    // --- 判斷方向  ---
     function updateMovementDirection(beta, alpha) {
         let direction = "靜止";
         if (beta > MOVEMENT_THRESHOLD) direction = "往上";
@@ -208,17 +200,13 @@
         else if (alpha < -MOVEMENT_THRESHOLD) direction = "往右";
         else if (alpha > MOVEMENT_THRESHOLD) direction = "往左";
 
-        // 如果當前方向與上一次不同，就觸發「聲音」回饋
         if (direction !== lastDirection) {
             playFeedbackSound(direction);
         }
-        // 更新上一次的方向紀錄
         lastDirection = direction;
 
-        // 更新畫面顯示
-        let text = (direction === "靜止") ? "等待指令..." : `指令: ${direction}`;
-        // 我們將文字更新的部分也整合到 final-command 區塊，讓版面更簡潔
-        finalCommandElem.innerHTML = `<h3>當前方向</h3><p style="font-weight: bold; font-size: 1.2em; color: #ffc107;">${direction}</p>`;
+        // 更新「目前方向」的顯示
+        directionDisplayElem.textContent = direction;
     }
 </script>
 </body>
