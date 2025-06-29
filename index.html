@@ -78,7 +78,7 @@
     <div class="data-grid">
         <div class="data-item">
             <h3>原始數值</h3>
-            <p id="raw-data">Alpha: 0, Beta: 0</p>
+            <p id="raw-data">Alpha: 0, Beta: 0, Gamma: 0</p>
         </div>
         <div class="data-item">
             <h3>校正基準</h3>
@@ -86,7 +86,7 @@
         </div>
         <div class="data-item">
             <h3>相對角度</h3>
-            <p id="relative-data">Alpha: 0, Beta: 0</p>
+            <p id="relative-data">Alpha: 0, Beta: 0, Gamma: 0</p>
         </div>
         <div class="data-item">
             <h3>當前方向</h3>
@@ -113,12 +113,14 @@
     let isCalibrated = false;
     let currentAlpha = 0;
     let currentBeta = 0;
-    let currentGamma = 0;
+    
+    const MOVEMENT_THRESHOLD = 20;
 
-    const MOVEMENT_THRESHOLD = 10; // 傾斜超過10度才觸發
-    let movementInterval = null;
+    // --- 新增變數 ---
+    // 用來儲存上一次的方向，以便判斷方向是否改變
+    let lastDirection = '靜止';
 
-    // 1. 權限請求 
+    // 1. 權限請求 (與之前相同)
     permissionButton.addEventListener('click', requestSensorPermission);
     function requestSensorPermission() {
         if (typeof DeviceOrientationEvent.requestPermission === 'function') {
@@ -135,72 +137,95 @@
         }
     }
 
-    // 2. 校正功能 (新增 alpha 的校正)
+    // 2. 校正功能 (與之前相同)
     calibrateButton.addEventListener('click', () => {
         calibration.alpha = currentAlpha;
         calibration.beta = currentBeta;
-        calibration.gamma = currentGamma;
         isCalibrated = true;
-        calibrationDataElem.innerHTML = `Alpha: ${calibration.alpha.toFixed(1)}, Beta: ${calibration.beta.toFixed(1)}, Gamma: ${calibration.gamma.toFixed(1)}`;
+        calibrationDataElem.innerHTML = `Alpha: ${calibration.alpha.toFixed(1)}, Beta: ${calibration.beta.toFixed(1)}`;
     });
 
-    // 3. 處理陀螺儀數據
+    // --- 新增函式 ---
+    // 根據方向觸發不同的震動模式
+    function triggerVibration(direction) {
+        // 檢查瀏覽器是否支援震動 API
+        if (!('vibrate' in navigator)) {
+            return;
+        }
+
+        switch (direction) {
+            case '往上':
+                // 往上：一個長的震動
+                navigator.vibrate(150);
+                break;
+            case '往下':
+                // 往下：兩個短的震動，像 "咚咚"
+                navigator.vibrate([70, 50, 70]);
+                break;
+            case '往左':
+            case '往右':
+                // 左右：一個短促的震動
+                navigator.vibrate(80);
+                break;
+            case '靜止':
+                // 回到靜止狀態時，給一個非常輕微的 "滴答" 回饋
+                if (lastDirection !== '靜止') {
+                    navigator.vibrate(50);
+                }
+                break;
+        }
+    }
+
+
+    // 3. 處理陀螺儀數據 (與之前相同)
     function handleOrientation(event) {
-        if (!event.alpha || !event.beta || !event.gamma) return;
+        if (!event.alpha || !event.beta) return;
 
         currentAlpha = event.alpha;
         currentBeta = event.beta;
-
-        rawDataElem.innerHTML = `Alpha: ${currentAlpha.toFixed(1)}, Beta: ${currentBeta.toFixed(1)}, Gamma: ${currentGamma.toFixed(1)}`;
-
+        rawDataElem.innerHTML = `Alpha: ${currentAlpha.toFixed(1)}, Beta: ${currentBeta.toFixed(1)}`;
         if (!isCalibrated) return;
 
-        // 計算相對角度 (Beta 的計算不變)
         const relativeBeta = currentBeta - calibration.beta;
-
-        // *** 計算相對 Alpha (處理 0/360 度臨界點問題) ***
         let diff = currentAlpha - calibration.alpha;
-        if (diff < -180) {
-            diff += 360;
-        } else if (diff > 180) {
-            diff -= 360;
-        }
+        if (diff < -180) { diff += 360; } 
+        else if (diff > 180) { diff -= 360; }
         const relativeAlpha = diff;
         
-        relativeDataElem.innerHTML = `Alpha: ${relativeAlpha.toFixed(1)}, Beta: ${relativeBeta.toFixed(1)}, Gamma: ${currentGamma.toFixed(1)}`;
-        
-        // 判斷移動方向
+        relativeDataElem.innerHTML = `Alpha: ${relativeAlpha.toFixed(1)}, Beta: ${relativeBeta.toFixed(1)}`;
         updateMovementDirection(relativeBeta, relativeAlpha);
     }
     
-    // 4. 判斷方向 (將 gamma 換成 alpha)
-    function updateMovementDirection(beta, alpha, gamma) {
+    // 4. 判斷方向 (已整合震動功能)
+    function updateMovementDirection(beta, alpha) {
         let direction = "靜止";
         
-        // 優先判斷上下 (beta)
-        if (beta < -MOVEMENT_THRESHOLD) {
-            direction = "往下";
-        } else if (beta > MOVEMENT_THRESHOLD) {
+        // 判斷方向 (反轉後的版本)
+        if (beta > MOVEMENT_THRESHOLD) {
             direction = "往上";
-        } 
-        // 再判斷左右 (alpha)
-        else if (alpha > MOVEMENT_THRESHOLD) {
-            direction = "往左";
+        } else if (beta < -MOVEMENT_THRESHOLD) {
+            direction = "往下";
         } else if (alpha < -MOVEMENT_THRESHOLD) {
             direction = "往右";
+        } else if (alpha > MOVEMENT_THRESHOLD) {
+            direction = "往左";
         }
 
+        // --- 新增判斷 ---
+        // 如果當前方向與上一次不同，就觸發震動
+        if (direction !== lastDirection) {
+            triggerVibration(direction);
+        }
+        // 更新上一次的方向紀錄
+        lastDirection = direction;
+
+
+        // 更新畫面顯示 (即時更新版本)
         directionDataElem.textContent = direction;
-        
-        // 持續發送指令的邏輯 (與之前相同)
-        if (direction !== "靜止" && movementInterval === null) {
-            movementInterval = setInterval(() => {
-                finalCommandElem.textContent = `持續發送指令: ${direction}`;
-            }, 1000);
-        } else if (direction === "靜止" && movementInterval !== null) {
-            clearInterval(movementInterval);
-            movementInterval = null;
+        if (direction === "靜止") {
             finalCommandElem.textContent = "等待指令...";
+        } else {
+            finalCommandElem.textContent = `指令: ${direction}`;
         }
     }
 </script>
