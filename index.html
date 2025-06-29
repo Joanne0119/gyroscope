@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>體感遙控器模擬</title>
+    <title>體感遙控器模擬 (修正版)</title>
     <style>
         body {
             display: flex;
@@ -78,7 +78,7 @@
     <div class="data-grid">
         <div class="data-item">
             <h3>原始數值</h3>
-            <p id="raw-data">Beta: 0, Gamma: 0</p>
+            <p id="raw-data">Alpha: 0, Beta: 0</p>
         </div>
         <div class="data-item">
             <h3>校正基準</h3>
@@ -86,7 +86,7 @@
         </div>
         <div class="data-item">
             <h3>相對角度</h3>
-            <p id="relative-data">Beta: 0, Gamma: 0</p>
+            <p id="relative-data">Alpha: 0, Beta: 0</p>
         </div>
         <div class="data-item">
             <h3>當前方向</h3>
@@ -109,102 +109,98 @@
     const directionDataElem = document.getElementById('direction-data');
     const finalCommandElem = document.getElementById('final-command');
 
-    let calibration = { beta: 0, gamma: 0 };
+    let calibration = { alpha: 0, beta: 0 };
     let isCalibrated = false;
+    let currentAlpha = 0;
     let currentBeta = 0;
-    let currentGamma = 0;
     
     const MOVEMENT_THRESHOLD = 20; // 傾斜超過20度才觸發
     let movementInterval = null;
 
-    // 1. 權限請求
+    // 1. 權限請求 (與之前相同)
     permissionButton.addEventListener('click', requestSensorPermission);
-
     function requestSensorPermission() {
         if (typeof DeviceOrientationEvent.requestPermission === 'function') {
             DeviceOrientationEvent.requestPermission()
                 .then(permissionState => {
                     if (permissionState === 'granted') {
                         window.addEventListener('deviceorientation', handleOrientation);
-                        this.textContent = '感應器已啟用';
-                        this.disabled = true;
-                    } else {
-                        alert('您拒絕了權限請求');
-                    }
-                })
-                .catch(console.error);
+                        this.textContent = '感應器已啟用'; this.disabled = true;
+                    } else { alert('您拒絕了權限請求'); }
+                }).catch(console.error);
         } else {
-            // 對於非 iOS 13+ 的設備
             window.addEventListener('deviceorientation', handleOrientation);
-            this.textContent = '感應器已啟用';
-            this.disabled = true;
+            this.textContent = '感應器已啟用'; this.disabled = true;
         }
     }
 
-    // 2. 校正功能
+    // 2. 校正功能 (新增 alpha 的校正)
     calibrateButton.addEventListener('click', () => {
+        calibration.alpha = currentAlpha;
         calibration.beta = currentBeta;
-        calibration.gamma = currentGamma;
         isCalibrated = true;
-        calibrationDataElem.innerHTML = `Beta: ${calibration.beta.toFixed(1)}, Gamma: ${calibration.gamma.toFixed(1)}`;
-        console.log('校正完成:', calibration);
+        calibrationDataElem.innerHTML = `Alpha: ${calibration.alpha.toFixed(1)}, Beta: ${calibration.beta.toFixed(1)}`;
     });
 
     // 3. 處理陀螺儀數據
     function handleOrientation(event) {
-        if (!event.beta || !event.gamma) return;
+        if (!event.alpha || !event.beta) return;
 
+        currentAlpha = event.alpha;
         currentBeta = event.beta;
-        currentGamma = event.gamma;
 
-        rawDataElem.innerHTML = `Beta: ${currentBeta.toFixed(1)}, Gamma: ${currentGamma.toFixed(1)}`;
+        rawDataElem.innerHTML = `Alpha: ${currentAlpha.toFixed(1)}, Beta: ${currentBeta.toFixed(1)}`;
         
         if (!isCalibrated) return;
 
-        // 計算相對角度
+        // 計算相對角度 (Beta 的計算不變)
         const relativeBeta = currentBeta - calibration.beta;
-        const relativeGamma = currentGamma - calibration.gamma;
+
+        // *** 計算相對 Alpha (處理 0/360 度臨界點問題) ***
+        let diff = currentAlpha - calibration.alpha;
+        if (diff < -180) {
+            diff += 360;
+        } else if (diff > 180) {
+            diff -= 360;
+        }
+        const relativeAlpha = diff;
         
-        relativeDataElem.innerHTML = `Beta: ${relativeBeta.toFixed(1)}, Gamma: ${relativeGamma.toFixed(1)}`;
+        relativeDataElem.innerHTML = `Alpha: ${relativeAlpha.toFixed(1)}, Beta: ${relativeBeta.toFixed(1)}`;
         
         // 判斷移動方向
-        updateMovementDirection(relativeBeta, relativeGamma);
+        updateMovementDirection(relativeBeta, relativeAlpha);
     }
     
-    // 4. 判斷方向並觸發持續移動
-    function updateMovementDirection(beta, gamma) {
+    // 4. 判斷方向 (將 gamma 換成 alpha)
+    function updateMovementDirection(beta, alpha) {
         let direction = "靜止";
         
-        // 優先判斷上下 (beta)，因為傾斜角度通常較大
-        if (beta > MOVEMENT_THRESHOLD) {
-            direction = "往下";
-        } else if (beta < -MOVEMENT_THRESHOLD) {
+        // 優先判斷上下 (beta)
+        if (beta < -MOVEMENT_THRESHOLD) {
             direction = "往上";
+        } else if (beta > MOVEMENT_THRESHOLD) {
+            direction = "往下";
         } 
-        // 如果上下沒有觸發，再判斷左右 (gamma)
-        else if (gamma > MOVEMENT_THRESHOLD) {
+        // 再判斷左右 (alpha)
+        else if (alpha > MOVEMENT_THRESHOLD) {
             direction = "往右";
-        } else if (gamma < -MOVEMENT_THRESHOLD) {
+        } else if (alpha < -MOVEMENT_THRESHOLD) {
             direction = "往左";
         }
 
         directionDataElem.textContent = direction;
         
-        // 如果方向不是靜止，且計時器未啟動，則啟動計時器
+        // 持續發送指令的邏輯 (與之前相同)
         if (direction !== "靜止" && movementInterval === null) {
             movementInterval = setInterval(() => {
                 finalCommandElem.textContent = `持續發送指令: ${direction}`;
-                console.log(`發送指令: ${direction}`);
-            }, 1000); // 每秒發送一次
-        } 
-        // 如果方向是靜止，則清除計時器
-        else if (direction === "靜止" && movementInterval !== null) {
+            }, 1000);
+        } else if (direction === "靜止" && movementInterval !== null) {
             clearInterval(movementInterval);
             movementInterval = null;
             finalCommandElem.textContent = "等待指令...";
         }
     }
-
 </script>
 </body>
 </html>
