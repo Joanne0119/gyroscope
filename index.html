@@ -194,20 +194,26 @@
     
     // --- 判斷方向  ---
     function updateMovementDirection(beta, alpha) {
-        let direction = "靜止";
+    const absAlpha = Math.abs(alpha);
+    const absBeta = Math.abs(beta);
+
+    let direction = '靜止';
+
+    // 判斷哪個方向的偏移量比較大，避免混淆
+    if (absBeta > absAlpha) {
         if (beta > MOVEMENT_THRESHOLD) direction = "往上";
         else if (beta < -MOVEMENT_THRESHOLD) direction = "往下";
-        else if (alpha < -MOVEMENT_THRESHOLD) direction = "往右";
+    } else {
+        if (alpha < -MOVEMENT_THRESHOLD) direction = "往右";
         else if (alpha > MOVEMENT_THRESHOLD) direction = "往左";
-
-        if (direction !== lastDirection) {
-            playFeedbackSound(direction);
-        }
-        lastDirection = direction;
-
-        // 更新「目前方向」的顯示
-        directionDisplayElem.textContent = direction;
     }
+    // 音效與畫面更新
+    if (direction !== lastDirection) {
+        playFeedbackSound(direction);
+        directionDisplayElem.textContent = direction;
+        lastDirection = direction;
+    }
+}
 </script>
 </body>
 </html>
