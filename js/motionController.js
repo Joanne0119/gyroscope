@@ -480,3 +480,5 @@ class MotionController {
         return { ...this.state.calibration };
     }
 }
+
+export default MotionController;
