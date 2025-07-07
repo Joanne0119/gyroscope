@@ -1,3 +1,4 @@
+import MotionController from './motionController.js';
 // --- 元素宣告 ---
 const permissionButton = document.getElementById('permission-button');
 const calibrateButton = document.getElementById('calibrate-button');
