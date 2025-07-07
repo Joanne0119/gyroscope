@@ -5,6 +5,7 @@ const calibrateButton = document.getElementById('calibrate-button');
 const rawDataElem = document.getElementById('raw-data');
 const calibrationDataElem = document.getElementById('calibration-data');
 const directionDisplayElem = document.getElementById('direction-display');
+const permissionInfoElem = document.getElementById('permission-info');
 
 // --- 創建 MotionController 實例 ---
 const motionController = new MotionController({
@@ -74,7 +75,7 @@ permissionButton.addEventListener('click', async function() {
     try {
         // 初始化 MotionController
         const success = await motionController.init();
-        
+
         if (success) {
             this.textContent = '感應器已啟用';
             this.disabled = true;
@@ -109,6 +110,20 @@ calibrateButton.addEventListener('click', async function() {
         this.disabled = false;
     }
 });
+
+// --- 平台資訊 ---
+permissionInfoElem.textContent = `平台: ${motionController.getPlatform()}\n體感權限: ${motionController.getPermissions().motion}\n方向權限: ${motionController.getPermissions().orientation}\n平台支援: ${motionController.isPlatformSupported() ? '是' : '否'}`;
+console.log('平台權限:', motionController.getPermissions());
+
+if (motionController.isPlatformSupported()) {
+     console.log('平台支援體感控制');
+} else {
+    alert('平台可能不支援體感控制');
+}
+
+const instructions = motionController.getPlatformInstructions();
+console.log('使用說明:', instructions);
+
 
 // --- 可選的額外功能 ---
 

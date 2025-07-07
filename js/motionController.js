@@ -14,6 +14,9 @@ class MotionController {
             ...config
         };
 
+        // 平台資訊
+        this.platform = this.detectPlatform();
+
         // 狀態管理
         this.state = {
             isCalibrated: false,
@@ -25,6 +28,13 @@ class MotionController {
             smoothed: { alpha: 0, beta: 0, gamma: 0 },
             rawHistory: [],
             calibrationBuffer: []
+        };
+
+        // 權限狀態
+        this.permissions = {
+            orientation: 'unknown',
+            motion: 'unknown',
+            platform: this.platform
         };
 
         // 音效系統
@@ -42,6 +52,8 @@ class MotionController {
         // 綁定方法
         this.handleOrientation = this.handleOrientation.bind(this);
         this.handleMotion = this.handleMotion.bind(this);
+        
+        this.log(`MotionController 初始化，檢測到平台: ${this.platform}`);
     }
 
     // === 初始化與權限管理 ===
@@ -65,21 +77,185 @@ class MotionController {
     }
 
     async requestPermissions() {
-        // iOS 13+ 權限請求
-        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-            const orientationPermission = await DeviceOrientationEvent.requestPermission();
-            if (orientationPermission !== 'granted') {
-                throw new Error('需要陀螺儀權限');
-            }
-        }
+        const results = {
+            orientation: 'unknown',
+            motion: 'unknown',
+            platform: this.platform
+        };
 
-        // iOS 13+ 動作感應權限
-        if (typeof DeviceMotionEvent.requestPermission === 'function') {
-            const motionPermission = await DeviceMotionEvent.requestPermission();
-            if (motionPermission !== 'granted') {
-                this.log('動作感應權限未獲得，將只使用方向感應');
+        try {
+            // 檢測設備類型
+            this.log('檢測到的平台:', results.platform);
+
+            // iOS 13+ 權限請求
+            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                this.log('iOS 13+ 檢測到，請求方向感應權限...');
+                
+                const orientationPermission = await DeviceOrientationEvent.requestPermission();
+                results.orientation = orientationPermission;
+                
+                if (orientationPermission !== 'granted') {
+                    throw new Error('需要陀螺儀權限才能使用體感控制');
+                }
+                
+                this.log('方向感應權限已獲得');
+            } else {
+                // Android 和其他設備
+                this.log('非 iOS 13+ 設備，檢查感應器可用性...');
+                
+                // 檢查是否支援 DeviceOrientationEvent
+                if (window.DeviceOrientationEvent) {
+                    results.orientation = 'granted';
+                    this.log('設備支援方向感應');
+                } else {
+                    results.orientation = 'denied';
+                    throw new Error('此設備不支援方向感應器');
+                }
+            }
+
+            // 動作感應權限 (iOS 13+)
+            if (typeof DeviceMotionEvent.requestPermission === 'function') {
+                this.log('請求動作感應權限...');
+                
+                const motionPermission = await DeviceMotionEvent.requestPermission();
+                results.motion = motionPermission;
+                
+                if (motionPermission !== 'granted') {
+                    this.log('動作感應權限未獲得，將只使用方向感應');
+                } else {
+                    this.log('動作感應權限已獲得');
+                }
+            } else {
+                // 檢查是否支援 DeviceMotionEvent
+                if (window.DeviceMotionEvent) {
+                    results.motion = 'granted';
+                    this.log('設備支援動作感應');
+                } else {
+                    results.motion = 'denied';
+                    this.log('設備不支援動作感應');
+                }
+            }
+
+            // 更新權限狀態
+            this.permissions = results;
+
+            // 額外的兼容性檢查
+            await this.performCompatibilityCheck();
+            
+            this.log('權限請求完成:', results);
+            return results;
+
+        } catch (error) {
+            this.log('權限請求失敗:', error);
+            throw error;
+        }
+    }
+
+    // 檢測平台
+    detectPlatform() {
+        const userAgent = navigator.userAgent;
+        const platform = navigator.platform;
+        
+        this.log('User Agent:', userAgent);
+        this.log('Platform:', platform);
+        
+        // 優先使用 navigator.platform（較不容易被開發者工具模擬）
+        if (platform) {
+            if (/iPhone|iPad|iPod/i.test(platform)) {
+                return 'iOS';
+            } else if (/MacIntel|Mac68K|MacPPC/i.test(platform)) {
+                return 'macOS';
+            } else if (/Win/i.test(platform)) {
+                return 'Windows';
+            } else if (/Linux/i.test(platform)) {
+                // 進一步區分 Linux 和 Android
+                if (/Android/i.test(userAgent)) {
+                    return 'Android';
+                }
+                return 'Linux';
             }
         }
+        
+        // 備用方案：使用 userAgent
+        if (/iPhone|iPad|iPod/i.test(userAgent)) {
+            return 'iOS';
+        } else if (/Macintosh|Mac OS X|MacIntel/i.test(userAgent)) {
+            return 'macOS';
+        } else if (/Android/i.test(userAgent)) {
+            return 'Android';
+        } else if (/Windows NT|Windows/i.test(userAgent)) {
+            return 'Windows';
+        } else if (/Linux/i.test(userAgent)) {
+            return 'Linux';
+        }
+        
+        return 'Unknown';
+    }
+
+    // 兼容性檢查
+    async performCompatibilityCheck() {
+        return new Promise((resolve) => {
+            let orientationReceived = false;
+            let motionReceived = false;
+            
+            // 設定測試監聽器
+            const testOrientation = (event) => {
+                if (event.alpha !== null || event.beta !== null || event.gamma !== null) {
+                    orientationReceived = true;
+                    this.log('方向感應器測試成功');
+                }
+            };
+            
+            const testMotion = (event) => {
+                if (event.acceleration || event.accelerationIncludingGravity) {
+                    motionReceived = true;
+                    this.log('動作感應器測試成功');
+                }
+            };
+            
+            // 添加測試監聽器
+            window.addEventListener('deviceorientation', testOrientation);
+            window.addEventListener('devicemotion', testMotion);
+            
+            // 2秒後檢查結果
+            setTimeout(() => {
+                window.removeEventListener('deviceorientation', testOrientation);
+                window.removeEventListener('devicemotion', testMotion);
+                
+                if (!orientationReceived) {
+                    this.log('警告: 方向感應器可能無法正常工作');
+                }
+                
+                if (!motionReceived) {
+                    this.log('警告: 動作感應器可能無法正常工作');
+                }
+                
+                resolve({
+                    orientationWorking: orientationReceived,
+                    motionWorking: motionReceived
+                });
+            }, 2000);
+        });
+    }
+
+    // 提供更詳細的錯誤訊息
+    getPermissionErrorMessage(platform, error) {
+        const messages = {
+            'iOS': {
+                'denied': '請到「設定 > Safari > 動態與方向」中啟用動態與方向存取',
+                'blocked': '感應器權限已被阻止，請重新載入頁面並允許權限'
+            },
+            'Android': {
+                'denied': '請確認瀏覽器支援設備感應器，並嘗試使用 Chrome 瀏覽器',
+                'blocked': '請檢查瀏覽器設定中的感應器權限'
+            },
+            'Unknown': {
+                'denied': '此設備可能不支援體感控制功能',
+                'blocked': '請使用支援設備感應器的行動設備'
+            }
+        };
+
+        return messages[platform] || messages['Unknown'];
     }
 
     setupAudio() {
@@ -88,6 +264,7 @@ class MotionController {
         try {
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
             this.audioEnabled = true;
+            this.log(`音效系統初始化成功 (${this.platform})`);
         } catch (error) {
             this.log('音效初始化失敗:', error);
         }
@@ -110,6 +287,8 @@ class MotionController {
                 this.resume();
             }
         });
+        
+        this.log(`事件監聽器設定完成 (${this.platform})`);
     }
 
     // === 校正系統 ===
@@ -478,6 +657,65 @@ class MotionController {
 
     getCalibration() {
         return { ...this.state.calibration };
+    }
+
+    // === 新增：取得平台和權限資訊 ===
+    getPlatform() {
+        return this.platform;
+    }
+
+    getPermissions() {
+        return { ...this.permissions };
+    }
+
+    // === 新增：平台相關的配置調整 ===
+    applyPlatformSpecificConfig() {
+        switch (this.platform) {
+            case 'iOS':
+                // iOS 設備通常需要較低的閾值
+                this.config.movementThreshold = Math.min(this.config.movementThreshold, 15);
+                this.config.deadZone = Math.max(this.config.deadZone, 3);
+                break;
+            case 'Android':
+                // Android 設備可能需要較高的閾值
+                this.config.movementThreshold = Math.max(this.config.movementThreshold, 25);
+                this.config.deadZone = Math.max(this.config.deadZone, 8);
+                break;
+            default:
+                // 保持預設值
+                break;
+        }
+        
+        this.log(`已套用 ${this.platform} 平台專用配置`);
+    }
+
+    // === 新增：檢查平台兼容性 ===
+    isPlatformSupported() {
+        const supportedPlatforms = ['iOS', 'Android'];
+        return supportedPlatforms.includes(this.platform);
+    }
+
+    // === 新增：取得平台相關的使用說明 ===
+    getPlatformInstructions() {
+        const instructions = {
+            'iOS': {
+                setup: '請確保在 Safari 中開啟「動態與方向」權限',
+                calibration: '將 iPhone 平放在桌面上進行校正',
+                usage: '輕輕傾斜 iPhone 來控制方向'
+            },
+            'Android': {
+                setup: '建議使用 Chrome 瀏覽器以獲得最佳體驗',
+                calibration: '將手機平放並保持靜止進行校正',
+                usage: '輕輕傾斜手機來控制方向'
+            },
+            'Unknown': {
+                setup: '請使用支援體感功能的行動設備',
+                calibration: '將設備平放進行校正',
+                usage: '傾斜設備來控制方向'
+            }
+        };
+        
+        return instructions[this.platform] || instructions['Unknown'];
     }
 }
 
