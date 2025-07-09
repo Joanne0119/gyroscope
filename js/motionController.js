@@ -500,10 +500,10 @@ class MotionController {
             return '靜止';
         }
         
-        // 防止過度敏感
-        if (absAlpha > this.config.maxThreshold || absBeta > this.config.maxThreshold) {
-            return '動作過大';
-        }
+        // // 防止過度敏感
+        // if (absAlpha > this.config.maxThreshold || absBeta > this.config.maxThreshold) {
+        //     return '動作過大';
+        // }
         
         // 判斷主要方向
         if (absBeta > absAlpha) {
