@@ -526,7 +526,7 @@ class MotionController {
         const threshold = this.config.movementThreshold;
         
         // 死區處理
-        if (absAlpha < this.config.deadZone && absBeta < this.config.deadZone) {
+        if (Math.abs(alpha) < this.config.deadZone && Math.abs(beta) < this.config.deadZone) {
             return '靜止';
         }
         
