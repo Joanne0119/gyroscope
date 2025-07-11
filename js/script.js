@@ -92,7 +92,7 @@ permissionButton.addEventListener('click', async function() {
             
             console.log('MotionController 初始化成功');
         } else {
-            this.textContent = '初始化失敗';
+            this.textContent = '感應器啟用失敗';
             console.error('MotionController 初始化失敗');
         }
     } catch (error) {

@@ -61,6 +61,15 @@ class MotionController {
     async init() {
         try {
             await this.requestPermissions();
+
+            // 檢查權限狀態
+            const isSupported = await this.verifyGyroscopeSupport();
+            if (!isSupported) {
+                // 如果不支援，就拋出一個明確的錯誤
+                alert('您的設備不支援陀螺儀，或未提供完整的感應器數據。');
+                throw new Error('您的設備不支援陀螺儀，或未提供完整的感應器數據。');
+            }
+
             this.setupAudio();
             this.setupEventListeners();
             this.state.isActive = true;
@@ -72,7 +81,7 @@ class MotionController {
             this.log('MotionController initialized successfully');
             return true;
         } catch (error) {
-            this.handleError('初始化失敗', error);
+            this.handleError(error.message, error);
             return false;
         }
     }
@@ -257,6 +266,41 @@ class MotionController {
         };
 
         return messages[platform] || messages['Unknown'];
+    }
+
+    
+    async verifyGyroscopeSupport(timeout = 1500) {
+        this.log(`開始驗證陀螺儀支援性，超時設定: ${timeout}ms`);
+
+        return new Promise((resolve) => {
+            let receivedCompleteData = false;
+
+            // 暫時的事件處理器，只用來檢查數據是否完整
+            const testHandler = (event) => {
+                if (event.alpha !== null && event.beta !== null && event.gamma !== null) {
+                    this.log('接收到完整的陀螺儀數據');
+                    receivedCompleteData = true;
+                    // 一旦收到完整數據，就可以提前結束監聽
+                    window.removeEventListener('deviceorientation', testHandler);
+                }
+            };
+
+            window.addEventListener('deviceorientation', testHandler);
+
+            // 設定一個計時器，在指定時間後做出最終判斷
+            setTimeout(() => {
+                // 無論結果如何，都要移除這個暫時的監聽器，避免重複執行
+                window.removeEventListener('deviceorientation', testHandler);
+
+                if (receivedCompleteData) {
+                    this.log('驗證成功: 陀螺儀受支援');
+                    resolve(true);
+                } else {
+                    this.log('驗證失敗: 在指定時間內未收到完整陀螺儀數據');
+                    resolve(false);
+                }
+            }, timeout);
+        });
     }
 
     setupAudio() {
@@ -622,6 +666,7 @@ class MotionController {
         return configs[direction] || configs['靜止'];
     }
 
+    // === 震動反饋(iOS不支援) ===
     triggerVibration(direction) {
         if (!this.config.enableVibration || !navigator.vibrate) return;
         
