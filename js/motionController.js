@@ -295,6 +295,8 @@ class MotionController {
     // === 校正系統 ===
     async calibrate() {
         return new Promise((resolve, reject) => {
+            this.state.isCalibrated = false;
+            
             this.state.calibrationBuffer = [];
             this.log('開始校正，請保持手機靜止...');
             
@@ -573,6 +575,10 @@ class MotionController {
     // === 反饋系統 ===
     playFeedbackSound(direction) {
         if (!this.audioEnabled || !this.config.enableAudio) return;
+
+        if (this.audioContext && this.audioContext.state === 'suspended') {
+            this.audioContext.resume();
+        }
         
         try {
             const oscillator = this.audioContext.createOscillator();
