@@ -521,8 +521,9 @@ class MotionController {
     }
 
     determineDirection(alpha, beta) {
-        const absAlpha = Math.abs(alpha);
-        const absBeta = Math.abs(beta);
+        // const absAlpha = Math.abs(alpha);
+        // const absBeta = Math.abs(beta);
+        const threshold = this.config.movementThreshold;
         
         // 死區處理
         if (absAlpha < this.config.deadZone && absBeta < this.config.deadZone) {
