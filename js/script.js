@@ -6,6 +6,7 @@ const rawDataElem = document.getElementById('raw-data');
 const calibrationDataElem = document.getElementById('calibration-data');
 const directionDisplayElem = document.getElementById('direction-display');
 const permissionInfoElem = document.getElementById('permission-info');
+const coordinateDisplayElem = document.getElementById('coordinate-display');
 
 // --- 創建 MotionController 實例 ---
 const motionController = new MotionController({
@@ -31,6 +32,12 @@ motionController.on('directionChange', (direction, lastDirection) => {
     
     // 可以在這裡添加額外的視覺效果
     directionDisplayElem.className = direction !== '靜止' ? 'direction-active' : '';
+});
+
+motionController.on('coordinateChange', (coords) => {
+    console.log(`目前座標: X=${coords.x.toFixed(2)}, Y=${coords.y.toFixed(2)}`);
+    
+    coordinateDisplayElem.textContent = `(${coords.x.toFixed(2)}, ${coords.y.toFixed(2)})`;
 });
 
 // 校正完成回調
@@ -112,7 +119,7 @@ calibrateButton.addEventListener('click', async function() {
 });
 
 // --- 平台資訊 ---
-permissionInfoElem.textContent = `平台: ${motionController.getPlatform()}\n體感權限: ${motionController.getPermissions().motion}\n方向權限: ${motionController.getPermissions().orientation}\n平台支援: ${motionController.isPlatformSupported() ? '是' : '否'}`;
+permissionInfoElem.textContent = `平台: ${motionController.getPlatform()}\n平台支援: ${motionController.isPlatformSupported() ? '是' : '否'}`;
 console.log('平台權限:', motionController.getPermissions());
 
 if (motionController.isPlatformSupported()) {

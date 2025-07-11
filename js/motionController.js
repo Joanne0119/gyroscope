@@ -44,6 +44,7 @@ class MotionController {
         // 回調函式
         this.callbacks = {
             onDirectionChange: null,
+            onCoordinateChange: null,
             onCalibrationComplete: null,
             onSensorData: null,
             onError: null
@@ -439,6 +440,29 @@ class MotionController {
         }
     }
 
+    getDirectionAsCoordinates() {
+        if (!this.state.isCalibrated) {
+            return { x: 0, y: 0 }; // 如果尚未校正，回傳中心點
+        }
+
+        const { alpha, beta } = this.calculateRelativeMovement();
+        const maxAngle = this.config.maxThreshold;
+
+        let x = -alpha / maxAngle;
+        let y = beta / maxAngle;
+
+        x = Math.max(-1, Math.min(1, x));
+        y = Math.max(-1, Math.min(1, y));
+
+        const magnitude = Math.sqrt(x * x + y * y);
+        if (magnitude > 1) {
+            x /= magnitude;
+            y /= magnitude;
+        }
+
+        return { x, y };
+    }
+
     addToHistory(data) {
         this.state.rawHistory.push(data);
         if (this.state.rawHistory.length > 50) {
@@ -464,6 +488,11 @@ class MotionController {
     updateMovementDirection() {
         const { alpha, beta } = this.calculateRelativeMovement();
         const direction = this.determineDirection(alpha, beta);
+
+        const coords = this.getDirectionAsCoordinates();
+        if (this.callbacks.onCoordinateChange) {
+            this.callbacks.onCoordinateChange(coords);
+        }
         
         if (direction !== this.state.currentDirection) {
             this.state.lastDirection = this.state.currentDirection;
@@ -505,14 +534,31 @@ class MotionController {
         //     return '動作過大';
         // }
         
-        // 判斷主要方向
-        if (absBeta > absAlpha) {
-            if (beta > this.config.movementThreshold) return '往上';
-            if (beta < -this.config.movementThreshold) return '往下';
-        } else {
-            if (alpha < -this.config.movementThreshold) return '往右';
-            if (alpha > this.config.movementThreshold) return '往左';
-        }
+        // // 判斷主要方向
+        // if (absBeta > absAlpha) {
+        //     if (beta > this.config.movementThreshold) return '往上';
+        //     if (beta < -this.config.movementThreshold) return '往下';
+        // } else {
+        //     if (alpha < -this.config.movementThreshold) return '往右';
+        //     if (alpha > this.config.movementThreshold) return '往左';
+        // }
+
+        const isUp = beta > threshold;
+        const isDown = beta < -threshold;
+        const isLeft = alpha > threshold; // alpha > 0 為往左
+        const isRight = alpha < -threshold; // alpha < 0 為往右
+
+        // 優先判斷對角線方向
+        if (isUp && isRight) return '往右上';
+        if (isUp && isLeft) return '往左上';
+        if (isDown && isRight) return '往右下';
+        if (isDown && isLeft) return '往左下';
+        
+        // 判斷基本四方向
+        if (isUp) return '往上';
+        if (isDown) return '往下';
+        if (isLeft) return '往左';
+        if (isRight) return '往右';
         
         return '靜止';
     }
@@ -558,6 +604,10 @@ class MotionController {
             '往下': { frequency: 400, type: 'sine', volume: 0.3, pan: 0, duration: 0.1 },
             '往左': { frequency: 600, type: 'sine', volume: 0.3, pan: -1, duration: 0.1 },
             '往右': { frequency: 600, type: 'sine', volume: 0.3, pan: 1, duration: 0.1 },
+            '往右上': { frequency: 700, type: 'sine', volume: 0.3, pan: 0.7, duration: 0.1 },
+            '往左上': { frequency: 700, type: 'sine', volume: 0.3, pan: -0.7, duration: 0.1 },
+            '往右下': { frequency: 500, type: 'sine', volume: 0.3, pan: 0.7, duration: 0.1 },
+            '往左下': { frequency: 500, type: 'sine', volume: 0.3, pan: -0.7, duration: 0.1 },
             '靜止': { frequency: 200, type: 'sine', volume: 0.15, pan: 0, duration: 0.05 },
             '動作過大': { frequency: 150, type: 'square', volume: 0.2, pan: 0, duration: 0.2 }
         };
@@ -573,6 +623,10 @@ class MotionController {
             '往下': [50],
             '往左': [30, 30, 30],
             '往右': [30, 30, 30],
+            '往右上': [40, 20],
+            '往左上': [40, 20],
+            '往右下': [40, 20],
+            '往左下': [40, 20],
             '靜止': [20],
             '動作過大': [100, 50, 100]
         };
