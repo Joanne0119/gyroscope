@@ -21,6 +21,8 @@ const motionController = new MotionController({
     maxThreshold: 60              // 最大閾值
 });
 
+// ball
+
 const canvas = document.getElementById('liquid-canvas');
 const ctx = canvas.getContext('2d');
 
@@ -66,6 +68,7 @@ motionController.on('coordinateChange', (coords) => {
     console.log(`目前座標: X=${coords.x.toFixed(2)}, Y=${coords.y.toFixed(2)}`);
     
     coordinateDisplayElem.textContent = `(${coords.x.toFixed(2)}, ${coords.y.toFixed(2)})`;
+    drawLiquidBall(coords.x, coords.y);
 });
 
 // 校正完成回調
