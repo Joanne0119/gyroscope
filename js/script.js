@@ -21,6 +21,34 @@ const motionController = new MotionController({
     maxThreshold: 60              // 最大閾值
 });
 
+const canvas = document.getElementById('liquid-canvas');
+const ctx = canvas.getContext('2d');
+
+const canvasSize = canvas.width;
+const center = canvasSize / 2;
+const ballRadius = 25; 
+const containerRadius = center - ballRadius - 5; 
+
+function drawLiquidBall(x, y) {
+    ctx.fillStyle = 'rgba(240, 240, 240, 0.3)';
+    ctx.fillRect(0, 0, canvasSize, canvasSize);
+
+    ctx.strokeStyle = '#bbb';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(center, center, containerRadius, 0, Math.PI * 2);
+    ctx.stroke();
+
+    const ballX = center + x * containerRadius;
+    const ballY = center + y * containerRadius;
+
+    ctx.fillStyle = '#007bff'; 
+    ctx.beginPath();
+    ctx.arc(ballX, ballY, ballRadius, 0, Math.PI * 2);
+    ctx.fill();
+}
+
+
 // --- 設定 MotionController 回調函式 ---
 
 // 方向變化回調
@@ -131,6 +159,7 @@ if (motionController.isPlatformSupported()) {
 const instructions = motionController.getPlatformInstructions();
 console.log('使用說明:', instructions);
 
+drawLiquidBall(0, 0);
 
 // --- 可選的額外功能 ---
 
