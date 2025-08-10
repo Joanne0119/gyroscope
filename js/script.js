@@ -2,10 +2,10 @@ import MotionController from './motionController.js';
 // --- 元素宣告 ---
 const permissionButton = document.getElementById('permission-button');
 const calibrateButton = document.getElementById('calibrate-button');
-const rawDataElem = document.getElementById('raw-data');
+// const rawDataElem = document.getElementById('raw-data');
 const calibrationDataElem = document.getElementById('calibration-data');
 const directionDisplayElem = document.getElementById('direction-display');
-const permissionInfoElem = document.getElementById('permission-info');
+// const permissionInfoElem = document.getElementById('permission-info');
 const coordinateDisplayElem = document.getElementById('coordinate-display');
 
 // --- 創建 MotionController 實例 ---
@@ -84,10 +84,10 @@ motionController.on('calibrationComplete', (calibration) => {
 });
 
 // 感應器數據回調
-motionController.on('sensorData', (data) => {
-    // 更新原始數據顯示
-    rawDataElem.innerHTML = `Alpha: ${data.raw.alpha.toFixed(1)}, Beta: ${data.raw.beta.toFixed(1)}, Gamma: ${data.raw.gamma.toFixed(1)}`;
-});
+// motionController.on('sensorData', (data) => {
+//     // 更新原始數據顯示
+//     rawDataElem.innerHTML = `Alpha: ${data.raw.alpha.toFixed(1)}, Beta: ${data.raw.beta.toFixed(1)}, Gamma: ${data.raw.gamma.toFixed(1)}`;
+// });
 
 // 錯誤處理回調
 motionController.on('error', (message, error) => {
@@ -150,14 +150,14 @@ calibrateButton.addEventListener('click', async function() {
 });
 
 // --- 平台資訊 ---
-permissionInfoElem.textContent = `平台: ${motionController.getPlatform()}\n平台支援: ${motionController.isPlatformSupported() ? '是' : '否'}`;
-console.log('平台權限:', motionController.getPermissions());
+// permissionInfoElem.textContent = `平台: ${motionController.getPlatform()}\n平台支援: ${motionController.isPlatformSupported() ? '是' : '否'}`;
+// console.log('平台權限:', motionController.getPermissions());
 
-if (motionController.isPlatformSupported()) {
-     console.log('平台支援體感控制');
-} else {
-    alert('平台可能不支援體感控制');
-}
+// if (motionController.isPlatformSupported()) {
+//      console.log('平台支援體感控制');
+// } else {
+//     alert('平台可能不支援體感控制');
+// }
 
 const instructions = motionController.getPlatformInstructions();
 console.log('使用說明:', instructions);
