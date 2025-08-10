@@ -42,7 +42,7 @@ function drawLiquidBall(x, y) {
     ctx.stroke();
 
     const ballX = center + x * containerRadius;
-    const ballY = center + y * containerRadius;
+    const ballY = center - y * containerRadius;
 
     ctx.fillStyle = '#007bff'; 
     ctx.beginPath();
